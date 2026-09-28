@@ -15,13 +15,12 @@ def crear_grafica(
                 producto.get("nombre", "Sin nombre")
             )
 
-            data.append(
-                producto.get("cantidad_vendida", 0)
-            )
+            data.append(producto.get("ingresos", 0) if producto.get("metrica_orden") == "ingresos"
+                        else producto.get("cantidad_vendida", 0))
 
         return {
             "tipo": "bar",
-            "titulo": "Productos más vendidos",
+            "titulo": "Ingresos por producto" if resultado[0].get("metrica_orden") == "ingresos" else "Productos más vendidos",
             "labels": labels,
             "data": data
         }
@@ -52,6 +51,38 @@ def crear_grafica(
 
     if tool_name == "analizar_inventario":
         return grafica_inventario(resultado)
+
+    if tool_name == "reabastecimiento_priorizado":
+        return {"tipo": "bar", "titulo": "Ventas de productos por reabastecer",
+                "labels": [x.get("nombre", "Sin nombre") for x in resultado],
+                "data": [x.get("cantidad_vendida", 0) for x in resultado]}
+
+    if tool_name == "ingresos_por_categoria":
+        return {"tipo": "bar", "titulo": "Ingresos por categoría",
+                "labels": [x.get("categoria", "Sin categoría") for x in resultado],
+                "data": [x.get("ingresos", 0) for x in resultado]}
+
+    if tool_name == "ventas_por_dia":
+        return {"tipo": "bar", "titulo": "Ingresos por día",
+                "labels": [x.get("fecha", "Sin fecha") for x in resultado],
+                "data": [x.get("ingresos", 0) for x in resultado]}
+
+    if tool_name == "analizar_pedidos":
+        estados = resultado.get("por_estado", [])
+        return {"tipo": "doughnut", "titulo": "Pedidos por estado",
+                "labels": [x.get("estado", "Desconocido") for x in estados],
+                "data": [x.get("cantidad", 0) for x in estados]} if estados else None
+
+    if tool_name == "evolucion_pedidos":
+        return {"tipo": "bar", "titulo": "Evolución de pedidos",
+                "labels": [x.get("fecha", "Sin fecha") for x in resultado],
+                "data": [x.get("pedidos", 0) for x in resultado]}
+
+    if tool_name == "analizar_encargos":
+        estados = resultado.get("por_estado", [])
+        return {"tipo": "doughnut", "titulo": "Encargos por estado",
+                "labels": [x.get("estado", "Desconocido") for x in estados],
+                "data": [x.get("cantidad", 0) for x in estados]} if estados else None
 
     return None
 

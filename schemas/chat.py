@@ -9,7 +9,7 @@ class ChatRequest(BaseModel):
         max_length=2000
     )
 
-    conversation_id: Optional[str] = None
+    conversation_id: Optional[str] = Field(default=None, pattern=r"^[a-zA-Z0-9_-]{1,128}$")
 
 
 class GraficaResponse(BaseModel):

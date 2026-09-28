@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, Header
+from fastapi import APIRouter, HTTPException, Header, Query
 
 from schemas.chat import ChatRequest, ChatResponse
 from agents.admin_agent import procesar_mensaje_admin
@@ -36,3 +36,24 @@ def chat_admin(
             status_code=500,
             detail="No se pudo completar la consulta"
         )
+
+@router.get("/conversations")
+def conversations(x_admin_id: str = Header(...), offset: int = Query(0, ge=0, le=100000)):
+    from services.conversation_service import listar_conversaciones
+    return listar_conversaciones(x_admin_id, offset)
+
+
+@router.get("/conversations/{conversation_id}")
+def conversation(conversation_id: str, x_admin_id: str = Header(...)):
+    from services.conversation_service import recuperar_conversacion
+    result = recuperar_conversacion(x_admin_id, conversation_id)
+    if not result:
+        raise HTTPException(404, "Conversación no encontrada")
+    return result
+
+
+@router.delete("/conversations/{conversation_id}", status_code=204)
+def delete_conversation(conversation_id: str, x_admin_id: str = Header(...)):
+    from services.conversation_service import borrar_conversacion
+    if not borrar_conversacion(x_admin_id, conversation_id):
+        raise HTTPException(404, "Conversación no encontrada")

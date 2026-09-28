@@ -11,15 +11,18 @@ from tools.ventas import (
     ventas_totales,
     comparar_ventas,
     productos_baja_rotacion,
-    analizar_oportunidades_oferta
+    analizar_oportunidades_oferta,
+    ingresos_por_categoria,
+    ventas_por_dia
 )
-from tools.pedidos import pedidos_por_estado
+from tools.pedidos import pedidos_por_estado, analizar_pedidos, evolucion_pedidos, analizar_encargos
 
 from tools.ventas import comparar_ventas
 
 from tools.inventario import (
     productos_para_reabastecer,
-    analizar_inventario
+    analizar_inventario,
+    reabastecimiento_priorizado
 )
 
 
@@ -256,12 +259,18 @@ ADMIN_TOOLS = [
                 "limite": {
                     "type": "integer",
                     "description": "Número máximo de productos."
+                },
+                "metrica": {
+                    "type": "string",
+                    "enum": ["cantidad", "ingresos"],
+                    "description": "Usa cantidad para más unidades vendidas o ingresos para mayor dinero generado."
                 }
             },
             "required": [
                 "fecha_inicio",
                 "fecha_fin",
-                "limite"
+                "limite",
+                "metrica"
             ],
             "additionalProperties": False
         },
@@ -312,7 +321,78 @@ ADMIN_TOOLS = [
 ]
 
 
+def _herramienta_periodo(nombre, descripcion, propiedades_adicionales=None, requeridos_adicionales=None):
+    propiedades = {
+        "fecha_inicio": {"type": "string", "description": "Inicio inclusivo del periodo en ISO 8601."},
+        "fecha_fin": {"type": "string", "description": "Fin inclusivo del periodo en ISO 8601."}
+    }
+    propiedades.update(propiedades_adicionales or {})
+    return {
+        "type": "function", "name": nombre, "description": descripcion,
+        "parameters": {"type": "object", "properties": propiedades,
+                       "required": ["fecha_inicio", "fecha_fin"] + (requeridos_adicionales or []),
+                       "additionalProperties": False},
+        "strict": True
+    }
+
+
+ADMIN_TOOLS.extend([
+    _herramienta_periodo(
+        "reabastecimiento_priorizado",
+        "Prioriza productos del catálogo que necesitan reabastecimiento cruzando stock actual con unidades vendidas e ingresos del periodo. Excluye productos exclusivos por encargo.",
+        {"limite_stock": {"type": "integer", "description": "Stock máximo considerado bajo, normalmente 10."},
+         "limite": {"type": "integer", "description": "Número máximo de productos, entre 1 y 100."}},
+        ["limite_stock", "limite"]
+    ),
+    _herramienta_periodo(
+        "ingresos_por_categoria",
+        "Agrupa ingresos y unidades vendidas por la categoría actual del producto. Identifica por separado productos históricos fuera del catálogo."
+    ),
+    _herramienta_periodo(
+        "ventas_por_dia",
+        "Devuelve ingresos y número de pedidos por día; permite encontrar el día con mayores ventas y graficar la evolución."
+    ),
+    _herramienta_periodo(
+        "analizar_pedidos",
+        "Resume pedidos del periodo: cantidad total, completados, cancelados, pedidos que generan ingreso, ingresos, ticket promedio y distribución por estado."
+    ),
+    _herramienta_periodo(
+        "evolucion_pedidos",
+        "Devuelve por fecha la cantidad de pedidos, completados y cancelados para analizar su evolución."
+    ),
+    _herramienta_periodo(
+        "analizar_encargos",
+        "Resume encargos del periodo, total estimado y distribuciones por estado y tipo de entrega. Los encargos son solicitudes distintas de los pedidos de compra inmediata."
+    )
+])
+
+
+def _rango(argumentos):
+    inicio = datetime.fromisoformat(argumentos["fecha_inicio"])
+    fin = datetime.fromisoformat(argumentos["fecha_fin"])
+    if inicio > fin:
+        raise ValueError("fecha_inicio no puede ser posterior a fecha_fin")
+    return inicio, fin
+
+
 def ejecutar_tool(nombre: str, argumentos: dict):
+
+    if nombre in {"ingresos_por_categoria", "ventas_por_dia", "analizar_pedidos", "evolucion_pedidos", "analizar_encargos"}:
+        inicio, fin = _rango(argumentos)
+        funciones = {
+            "ingresos_por_categoria": ingresos_por_categoria,
+            "ventas_por_dia": ventas_por_dia,
+            "analizar_pedidos": analizar_pedidos,
+            "evolucion_pedidos": evolucion_pedidos,
+            "analizar_encargos": analizar_encargos
+        }
+        return funciones[nombre](inicio, fin)
+
+    if nombre == "reabastecimiento_priorizado":
+        inicio, fin = _rango(argumentos)
+        limite_stock = max(0, min(int(argumentos["limite_stock"]), 100000))
+        limite = max(1, min(int(argumentos["limite"]), 100))
+        return reabastecimiento_priorizado(inicio, fin, limite_stock, limite)
 
     if nombre == "analizar_oportunidades_oferta":
         return analizar_oportunidades_oferta(
@@ -380,7 +460,8 @@ def ejecutar_tool(nombre: str, argumentos: dict):
         return productos_mas_vendidos(
             datetime.fromisoformat(argumentos["fecha_inicio"]),
             datetime.fromisoformat(argumentos["fecha_fin"]),
-            argumentos["limite"]
+            argumentos["limite"],
+            argumentos["metrica"]
         )
 
     if nombre == "ventas_totales":
