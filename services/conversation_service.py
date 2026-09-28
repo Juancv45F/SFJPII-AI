@@ -1,18 +1,14 @@
 from uuid import uuid4
+from datetime import datetime, timezone
+
+from database import db
 
 
-_conversaciones: dict[str, list[dict]] = {}
+coleccion = db.conversaciones_ai
 
 
 def crear_conversation_id() -> str:
     return str(uuid4())
-
-
-def _crear_clave(
-    admin_id: str,
-    conversation_id: str
-) -> str:
-    return f"{admin_id}:{conversation_id}"
 
 
 def obtener_historial(
@@ -20,15 +16,24 @@ def obtener_historial(
     conversation_id: str
 ) -> list[dict]:
 
-    clave = _crear_clave(
-        admin_id,
-        conversation_id
+    conversacion = coleccion.find_one(
+        {
+            "admin_id": admin_id,
+            "conversation_id": conversation_id
+        },
+        {
+            "_id": 0,
+            "mensajes": 1
+        }
     )
 
-    return _conversaciones.get(
-        clave,
+    if not conversacion:
+        return []
+
+    return conversacion.get(
+        "mensajes",
         []
-    ).copy()
+    )
 
 
 def agregar_mensaje(
@@ -37,22 +42,35 @@ def agregar_mensaje(
     role: str,
     content: str
 ):
-    clave = _crear_clave(
-        admin_id,
-        conversation_id
-    )
+    ahora = datetime.now(timezone.utc)
 
-    if clave not in _conversaciones:
-        _conversaciones[clave] = []
-
-    _conversaciones[clave].append({
-        "role": role,
-        "content": content
-    })
-
-    # Conservamos los últimos 12 mensajes.
-    _conversaciones[clave] = (
-        _conversaciones[clave][-12:]
+    coleccion.update_one(
+        {
+            "admin_id": admin_id,
+            "conversation_id": conversation_id
+        },
+        {
+            "$setOnInsert": {
+                "admin_id": admin_id,
+                "conversation_id": conversation_id,
+                "createdAt": ahora
+            },
+            "$set": {
+                "updatedAt": ahora
+            },
+            "$push": {
+                "mensajes": {
+                    "$each": [
+                        {
+                            "role": role,
+                            "content": content
+                        }
+                    ],
+                    "$slice": -12
+                }
+            }
+        },
+        upsert=True
     )
 
 
@@ -60,12 +78,9 @@ def borrar_conversacion(
     admin_id: str,
     conversation_id: str
 ):
-    clave = _crear_clave(
-        admin_id,
-        conversation_id
-    )
-
-    _conversaciones.pop(
-        clave,
-        None
+    coleccion.delete_one(
+        {
+            "admin_id": admin_id,
+            "conversation_id": conversation_id
+        }
     )
