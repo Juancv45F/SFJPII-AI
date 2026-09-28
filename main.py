@@ -1,5 +1,7 @@
 from fastapi import FastAPI
 from database import verificar_conexion
+from routes.test_tools import router as test_router
+from routes.admin import router as admin_router
 
 
 app = FastAPI(
@@ -7,7 +9,12 @@ app = FastAPI(
     version="1.0.0"
 )
 
+# Routes
 
+app.include_router(test_router)
+app.include_router(admin_router)
+
+# -------------------------------- 
 @app.get("/")
 def root():
     return {
