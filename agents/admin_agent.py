@@ -22,13 +22,16 @@ from prompts.admin import obtener_admin_prompt
 
 def procesar_mensaje_admin(
     mensaje: str,
-    conversation_id: str
+    conversation_id: str,
+    admin_id: str
 ):
     historial = obtener_historial(
+        admin_id,
         conversation_id
     )
 
     agregar_mensaje(
+        admin_id,
         conversation_id,
         "user",
         mensaje
@@ -87,6 +90,7 @@ def procesar_mensaje_admin(
                         break
 
             agregar_mensaje(
+                admin_id,
                 conversation_id,
                 "assistant",
                 response.output_text

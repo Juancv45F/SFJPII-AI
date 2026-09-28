@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Header
 
 from schemas.chat import ChatRequest, ChatResponse
 from agents.admin_agent import procesar_mensaje_admin
@@ -15,7 +15,10 @@ router = APIRouter(
     "/chat",
     response_model=ChatResponse
 )
-def chat_admin(request: ChatRequest):
+def chat_admin(
+    request: ChatRequest,
+    x_admin_id: str = Header(...)
+):
     try:
         conversation_id = (
             request.conversation_id
@@ -24,7 +27,8 @@ def chat_admin(request: ChatRequest):
 
         return procesar_mensaje_admin(
             mensaje=request.mensaje,
-            conversation_id=conversation_id
+            conversation_id=conversation_id,
+            admin_id=x_admin_id
         )
 
     except Exception:
