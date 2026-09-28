@@ -36,6 +36,29 @@ class AdminAnalyticsTest(unittest.TestCase):
         self.assertEqual(resultado[0]["prioridad"], "urgente")
         self.assertEqual(fake.productos.find.call_args.args[0]["solo_encargo"], {"$ne": True})
 
+    def test_todas_las_consultas_de_inventario_fisico_excluyen_solo_encargo(self):
+        cursor = Mock()
+        cursor.sort.return_value = []
+        fake_inventory = SimpleNamespace(productos=Mock())
+        fake_inventory.productos.find.return_value = cursor
+        fake_inventory.productos.count_documents.side_effect = [3, 1, 1, 1, 2]
+        with patch.object(inventario, "db", fake_inventory):
+            inventario.productos_stock_bajo(10)
+            resumen = inventario.analizar_inventario(10)
+        self.assertEqual(fake_inventory.productos.find.call_args.args[0]["solo_encargo"], {"$ne": True})
+        self.assertTrue(all(call.args[0].get("solo_encargo") == {"$ne": True}
+                            for call in fake_inventory.productos.count_documents.call_args_list[:4]))
+        self.assertEqual(resumen["productos_solo_encargo_excluidos"], 2)
+
+        fake_sales = SimpleNamespace(pedidos=Mock(), productos=Mock())
+        fake_sales.pedidos.aggregate.return_value = []
+        fake_sales.productos.find.return_value = []
+        with patch.object(ventas, "db", fake_sales):
+            self.assertEqual(ventas.productos_baja_rotacion(INICIO, FIN), [])
+            self.assertEqual(ventas.analizar_oportunidades_oferta(INICIO, FIN), [])
+        for call in fake_sales.productos.find.call_args_list:
+            self.assertEqual(call.args[0]["solo_encargo"], {"$ne": True})
+
     def test_productos_vendidos_incluyen_ingresos_stock_y_estado_catalogo(self):
         fake = SimpleNamespace(pedidos=Mock(), productos=Mock())
         fake.pedidos.aggregate.return_value = [
@@ -79,6 +102,8 @@ class AdminAnalyticsTest(unittest.TestCase):
             resultado = pedidos.analizar_pedidos(INICIO, FIN)
         self.assertEqual(resultado["ticket_promedio"], 175)
         self.assertEqual(resultado["por_estado"][1]["estado"], "cancelado")
+        resumen_pipeline = fake.pedidos.aggregate.call_args_list[1].args[0]
+        self.assertNotIn("cancelado", str(next(stage for stage in resumen_pipeline if "$group" in stage)["$group"]["ingresos"]))
 
     def test_encargos_se_mantienen_separados_de_pedidos(self):
         fake = SimpleNamespace(encargos=Mock())
@@ -106,6 +131,7 @@ class AdminAnalyticsTest(unittest.TestCase):
                 grafica = crear_grafica(nombre, datos)
                 self.assertEqual(grafica["tipo"], tipo)
                 self.assertEqual(len(grafica["labels"]), len(grafica["data"]))
+                self.assertIn("unidad", grafica)
 
     def test_registro_de_tools_es_estricto_y_ejecutor_valida_periodos(self):
         nombres = [tool["name"] for tool in admin_tools.ADMIN_TOOLS]
@@ -117,6 +143,10 @@ class AdminAnalyticsTest(unittest.TestCase):
                 self.assertEqual(set(tool["parameters"]["properties"]), set(tool["parameters"]["required"]))
         with self.assertRaises(ValueError):
             admin_tools.ejecutar_tool("ventas_por_dia", {"fecha_inicio": FIN.isoformat(), "fecha_fin": INICIO.isoformat()})
+        with self.assertRaises(ValueError):
+            admin_tools.ejecutar_tool("productos_stock_bajo", {"limite": -1})
+        with self.assertRaises(ValueError):
+            admin_tools.ejecutar_tool("ventas_totales", {"fecha_inicio": "no-es-fecha", "fecha_fin": FIN.isoformat()})
 
     def test_prompt_guia_seguimientos_y_no_contabiliza_cancelados(self):
         prompt = obtener_admin_prompt()

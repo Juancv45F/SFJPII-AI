@@ -1,4 +1,6 @@
 import json
+from time import monotonic
+from logging_setup import get_logger
 
 from services.llm_service import (
     crear_respuesta_admin,
@@ -20,11 +22,14 @@ from services.admin_tools import (
 from services.chart_service import crear_grafica
 from prompts.admin import obtener_admin_prompt
 
+logger = get_logger("sfjpii.ai.agent")
+
 def procesar_mensaje_admin(
     mensaje: str,
     conversation_id: str,
     admin_id: str
 ):
+    inicio = monotonic()
     historial = obtener_historial(
         admin_id,
         conversation_id
@@ -92,6 +97,10 @@ def procesar_mensaje_admin(
                 grafica=grafica
             )
 
+            logger.info("admin_chat_completed", extra={"admin_id": admin_id,
+                        "conversation_id": conversation_id, "tools": tools_utilizadas,
+                        "duration_ms": round((monotonic() - inicio) * 1000)})
+
             return {
                 "respuesta": response.output_text,
                 "tools_utilizadas": tools_utilizadas,
@@ -145,6 +154,9 @@ def procesar_mensaje_admin(
 
     respuesta = "No pude completar el análisis después de varias consultas."
     guardar_turno(admin_id, conversation_id, mensaje, respuesta)
+    logger.warning("admin_chat_tool_limit_reached", extra={"admin_id": admin_id,
+                   "conversation_id": conversation_id, "tools": tools_utilizadas,
+                   "duration_ms": round((monotonic() - inicio) * 1000)})
     return {
         "respuesta": respuesta,
         "tools_utilizadas": tools_utilizadas,

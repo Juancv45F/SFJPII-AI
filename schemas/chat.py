@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Optional, Literal
 from pydantic import BaseModel, Field
 
 
@@ -17,10 +17,11 @@ class GraficaResponse(BaseModel):
     titulo: str
     labels: list[str]
     data: list[float]
+    unidad: Literal["MXN", "unidades", "pedidos", "productos", "encargos"]
 
 
 class ChatResponse(BaseModel):
     respuesta: str
-    tools_utilizadas: list[str] = []
+    tools_utilizadas: list[str] = Field(default_factory=list)
     grafica: Optional[GraficaResponse] = None
     conversation_id: str

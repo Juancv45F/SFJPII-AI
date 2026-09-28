@@ -1,10 +1,24 @@
 from uuid import uuid4
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
+from pymongo import ASCENDING, DESCENDING
 
 from database import db
+from config import settings
 
 
 coleccion = db.conversaciones_ai
+
+
+def preparar_indices_conversaciones():
+    coleccion.create_index([("admin_id", ASCENDING), ("conversation_id", ASCENDING)],
+                           unique=True, name="admin_conversation_unique")
+    coleccion.create_index([("admin_id", ASCENDING), ("updatedAt", DESCENDING)],
+                           name="admin_updated_desc")
+    coleccion.create_index("expiresAt", expireAfterSeconds=0, name="conversation_expiration")
+
+
+def _expiracion(ahora):
+    return ahora + timedelta(days=settings.chat_retention_days) if settings.chat_retention_days > 0 else None
 
 
 def crear_conversation_id() -> str:
@@ -33,45 +47,6 @@ def obtener_historial(
     return conversacion.get(
         "mensajes",
         []
-    )
-
-
-def agregar_mensaje(
-    admin_id: str,
-    conversation_id: str,
-    role: str,
-    content: str,
-    grafica=None
-):
-    ahora = datetime.now(timezone.utc)
-
-    coleccion.update_one(
-        {
-            "admin_id": admin_id,
-            "conversation_id": conversation_id
-        },
-        {
-            "$setOnInsert": {
-                "admin_id": admin_id,
-                "conversation_id": conversation_id,
-                "createdAt": ahora
-            },
-            "$set": {
-                "updatedAt": ahora
-            },
-            "$push": {
-                "mensajes": {
-                    "$each": [
-                        {
-                            "role": role,
-                            "content": content,
-                            "grafica": grafica
-                        }
-                    ]
-                }
-            }
-        },
-        upsert=True
     )
 
 
@@ -106,9 +81,14 @@ def recuperar_conversacion(admin_id: str, conversation_id: str):
 
 def guardar_turno(admin_id: str, conversation_id: str, mensaje: str, respuesta: str, grafica=None):
     ahora = datetime.now(timezone.utc)
+    campos = {"updatedAt": ahora}
+    expiracion = _expiracion(ahora)
+    if expiracion is not None:
+        campos["expiresAt"] = expiracion
     coleccion.update_one({"admin_id": admin_id, "conversation_id": conversation_id}, {
         "$setOnInsert": {"admin_id": admin_id, "conversation_id": conversation_id, "createdAt": ahora},
-        "$set": {"updatedAt": ahora},
+        "$set": campos,
+        **({"$unset": {"expiresAt": ""}} if expiracion is None else {}),
         "$push": {"mensajes": {"$each": [
             {"role": "user", "content": mensaje},
             {"role": "assistant", "content": respuesta, "grafica": grafica}

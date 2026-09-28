@@ -1,5 +1,5 @@
 from database import db
-from tools.ventas import ESTADOS_VALIDOS
+from tools.constants import ESTADOS_VENTA, ZONA_HORARIA_NEGOCIO
 
 
 def pedidos_por_estado(fecha_inicio=None, fecha_fin=None):
@@ -41,8 +41,8 @@ def analizar_pedidos(fecha_inicio, fecha_fin):
             "total_pedidos": {"$sum": 1},
             "pedidos_completados": {"$sum": {"$cond": [{"$eq": ["$estado", "entregado"]}, 1, 0]}},
             "pedidos_cancelados": {"$sum": {"$cond": [{"$eq": ["$estado", "cancelado"]}, 1, 0]}},
-            "pedidos_con_ingreso": {"$sum": {"$cond": [{"$in": ["$estado", ESTADOS_VALIDOS]}, 1, 0]}},
-            "ingresos": {"$sum": {"$cond": [{"$in": ["$estado", ESTADOS_VALIDOS]}, "$total", 0]}}
+            "pedidos_con_ingreso": {"$sum": {"$cond": [{"$in": ["$estado", list(ESTADOS_VENTA)]}, 1, 0]}},
+            "ingresos": {"$sum": {"$cond": [{"$in": ["$estado", list(ESTADOS_VENTA)]}, "$total", 0]}}
         }},
         {"$project": {"_id": 0}}
     ]))
@@ -59,7 +59,7 @@ def evolucion_pedidos(fecha_inicio, fecha_fin):
     return list(db.pedidos.aggregate([
         {"$match": {"fecha": {"$gte": fecha_inicio, "$lte": fecha_fin}}},
         {"$group": {"_id": {"$dateToString": {"format": "%Y-%m-%d", "date": "$fecha",
-                                                  "timezone": "America/Mexico_City"}},
+                                                  "timezone": ZONA_HORARIA_NEGOCIO}},
                     "pedidos": {"$sum": 1},
                     "completados": {"$sum": {"$cond": [{"$eq": ["$estado", "entregado"]}, 1, 0]}},
                     "cancelados": {"$sum": {"$cond": [{"$eq": ["$estado", "cancelado"]}, 1, 0]}}}},
