@@ -23,5 +23,5 @@ def chat_admin(request: ChatRequest):
     except Exception as error:
         raise HTTPException(
             status_code=500,
-            detail=str(error)
+            detail="No se pudo completar la consulta"
         )

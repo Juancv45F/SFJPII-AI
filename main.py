@@ -1,4 +1,5 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Depends
+from security import require_service_key
 from database import verificar_conexion
 from routes.test_tools import router as test_router
 from routes.admin import router as admin_router
@@ -11,8 +12,8 @@ app = FastAPI(
 
 # Routes
 
-app.include_router(test_router)
-app.include_router(admin_router)
+app.include_router(test_router, dependencies=[Depends(require_service_key)])
+app.include_router(admin_router, dependencies=[Depends(require_service_key)])
 
 # -------------------------------- 
 @app.get("/")
