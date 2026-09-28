@@ -10,13 +10,29 @@ client = OpenAI(
 
 def crear_respuesta_admin(
     mensaje: str,
+    historial: list,
     instrucciones: str,
     tools: list
 ):
+    mensajes = []
+
+    # Agregamos el historial de la conversación.
+    for item in historial:
+        mensajes.append({
+            "role": item["role"],
+            "content": item["content"]
+        })
+
+    # Agregamos el mensaje actual.
+    mensajes.append({
+        "role": "user",
+        "content": mensaje
+    })
+
     return client.responses.create(
         model=settings.openai_model,
         instructions=instrucciones,
-        input=mensaje,
+        input=mensajes,
         tools=tools,
         store=True
     )
