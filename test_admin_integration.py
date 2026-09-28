@@ -12,11 +12,15 @@ collection = Mock()
 sys.modules['database'] = types.SimpleNamespace(db=types.SimpleNamespace(conversaciones_ai=collection))
 agent = Mock(return_value={"respuesta": "Resultado", "tools_utilizadas": [], "grafica": None, "conversation_id": "test-chat"})
 sys.modules['agents.admin_agent'] = types.SimpleNamespace(procesar_mensaje_admin=agent)
+client_agent = Mock(return_value={"respuesta": "Tu pedido está pendiente", "tools_utilizadas": ["consultar_mis_pedidos"], "grafica": None, "conversation_id": "client-chat"})
+sys.modules['agents.cliente_agent'] = types.SimpleNamespace(procesar_mensaje_cliente=client_agent)
 from security import require_service_key
-from routes.admin import router
+from routes.admin import router as admin_router
+from routes.cliente import router as client_router
 from tools.validators import ToolValidationError
 app = FastAPI()
-app.include_router(router, dependencies=[Depends(require_service_key)])
+app.include_router(admin_router, dependencies=[Depends(require_service_key)])
+app.include_router(client_router, dependencies=[Depends(require_service_key)])
 client = TestClient(app)
 
 class AdminIntegrationTest(unittest.TestCase):
@@ -24,6 +28,8 @@ class AdminIntegrationTest(unittest.TestCase):
         settings.sfjpii_ai_service_key = 'test-key'
         agent.reset_mock()
         agent.side_effect = None
+        client_agent.reset_mock()
+        client_agent.side_effect = None
 
     def test_authentication(self):
         for headers in ({}, {'X-Service-Key': 'wrong'}):
@@ -94,9 +100,37 @@ class AdminIntegrationTest(unittest.TestCase):
         from services.conversation_service import preparar_indices_conversaciones
         collection.create_index.reset_mock()
         preparar_indices_conversaciones()
-        self.assertEqual(collection.create_index.call_count, 3)
+        self.assertEqual(collection.create_index.call_count, 5)
         self.assertTrue(collection.create_index.call_args_list[0].kwargs['unique'])
         self.assertEqual(collection.create_index.call_args_list[2].kwargs['expireAfterSeconds'], 0)
+        self.assertTrue(collection.create_index.call_args_list[3].kwargs['unique'])
+
+    def test_client_identity_comes_only_from_trusted_header(self):
+        user_id = '507f1f77bcf86cd799439011'
+        response = client.post('/cliente/chat', json={
+            'mensaje': 'Mis pedidos', 'conversation_id': 'client-chat', 'user_id': 'otro'
+        }, headers={'X-Service-Key': 'test-key', 'X-User-Id': user_id})
+        self.assertEqual(response.status_code, 200)
+        client_agent.assert_called_once_with(
+            mensaje='Mis pedidos', conversation_id='client-chat', user_id=user_id
+        )
+
+    def test_client_rejects_invalid_trusted_identity(self):
+        response = client.post('/cliente/chat', json={'mensaje': 'Mis pedidos'},
+                               headers={'X-Service-Key': 'test-key', 'X-User-Id': 'otro'})
+        self.assertEqual(response.status_code, 400)
+        client_agent.assert_not_called()
+
+    def test_two_clients_never_share_the_history_filter(self):
+        from services.conversation_service import obtener_historial_cliente
+        collection.find_one.return_value = None
+        obtener_historial_cliente('client-a', 'same')
+        obtener_historial_cliente('client-b', 'same')
+        filters = [call.args[0] for call in collection.find_one.call_args_list[-2:]]
+        self.assertEqual(filters, [
+            {'tipo_usuario': 'cliente', 'user_id': 'client-a', 'conversation_id': 'same'},
+            {'tipo_usuario': 'cliente', 'user_id': 'client-b', 'conversation_id': 'same'}
+        ])
 
     def test_delete_is_scoped_to_admin(self):
         collection.delete_one.return_value.deleted_count = 1

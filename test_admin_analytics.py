@@ -2,11 +2,13 @@ import unittest
 from datetime import datetime, timezone
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
+from bson import ObjectId
 
-from tools import inventario, ventas, pedidos
-from services import admin_tools
+from tools import inventario, ventas, pedidos, cliente_pedidos
+from services import admin_tools, cliente_tools
 from services.chart_service import crear_grafica
 from prompts.admin import obtener_admin_prompt
+from prompts.cliente import obtener_cliente_prompt
 from database import client as mongo_client
 
 
@@ -19,6 +21,43 @@ FIN = datetime(2026, 9, 30, 23, 59, 59, tzinfo=timezone.utc)
 
 
 class AdminAnalyticsTest(unittest.TestCase):
+    def test_cliente_tools_inyectan_usuario_fuera_del_esquema_de_la_ia(self):
+        for tool in cliente_tools.CLIENTE_TOOLS:
+            self.assertNotIn("user_id", tool["parameters"].get("properties", {}))
+
+        user_id = str(ObjectId())
+        cursor = Mock()
+        cursor.sort.return_value.limit.return_value = []
+        fake = SimpleNamespace(pedidos=Mock(), encargos=Mock())
+        fake.pedidos.find.return_value = cursor
+        with patch.object(cliente_pedidos, "db", fake):
+            resultado = cliente_tools.ejecutar_cliente_tool(
+                "consultar_mis_pedidos", {"limite": 5}, user_id=user_id
+            )
+        self.assertEqual(resultado, [])
+        self.assertEqual(fake.pedidos.find.call_args.args[0], {"userId": ObjectId(user_id)})
+
+    def test_detalle_de_pedido_siempre_se_limita_al_propietario(self):
+        user_id = str(ObjectId())
+        pedido_id = str(ObjectId())
+        fake = SimpleNamespace(pedidos=Mock())
+        fake.pedidos.find_one.return_value = None
+        with patch.object(cliente_pedidos, "db", fake):
+            resultado = cliente_pedidos.consultar_mi_pedido(user_id, pedido_id)
+        self.assertFalse(resultado["encontrado"])
+        self.assertEqual(fake.pedidos.find_one.call_args.args[0], {
+            "_id": ObjectId(pedido_id), "userId": ObjectId(user_id)
+        })
+
+    def test_pedidos_y_encargos_validan_estado_e_identificadores(self):
+        with self.assertRaises(ValueError):
+            cliente_pedidos.consultar_mi_pedido(str(ObjectId()), "pedido-invalido")
+        with self.assertRaises(ValueError):
+            cliente_pedidos.consultar_mis_pedidos(str(ObjectId()), "desconocido")
+        prompt = obtener_cliente_prompt()
+        self.assertIn("Nunca pidas", prompt)
+        self.assertIn("consultar_mis_encargos", prompt)
+
     def test_prioriza_agotados_con_ventas_y_excluye_solo_encargo(self):
         fake = SimpleNamespace(pedidos=Mock(), productos=Mock())
         fake.pedidos.aggregate.return_value = [

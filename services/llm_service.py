@@ -8,7 +8,7 @@ client = OpenAI(
 )
 
 
-def crear_respuesta_admin(
+def crear_respuesta(
     mensaje: str,
     historial: list,
     instrucciones: str,
@@ -38,7 +38,7 @@ def crear_respuesta_admin(
     )
 
 
-def continuar_respuesta_admin(
+def continuar_respuesta(
     response_id: str,
     tool_outputs: list,
     instrucciones: str,
