@@ -5,7 +5,7 @@ class Settings(BaseSettings):
     mongodb_uri: str
     mongodb_database: str
 
-    sfjpii_ai_service_key: str = ""
+    sfjpii_ai_service_key: str
 
     openai_api_key: str
     openai_model: str = "gpt-6-luna"

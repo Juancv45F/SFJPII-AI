@@ -19,16 +19,30 @@ def buscar_producto(nombre: str):
             "solo_encargo": 1,
             "requiere_receta": 1,
 
-            # No devolvemos categoria._id
             "categoria.nombre": 1,
             "categoria.descripcion": 1,
             "categoria.activa": 1
         }
     )
 
-    return producto
+    if producto is None:
+        return {
+            "encontrado": False,
+            "nombre_buscado": nombre,
+            "estado": "no_disponible_en_catalogo",
+            "mensaje": (
+                f"El producto '{nombre}' no se encuentra actualmente "
+                "en el catálogo. Puede aparecer en el historial de pedidos "
+                "si fue vendido anteriormente."
+            )
+        }
 
-
+    return {
+        "encontrado": True,
+        "estado": "disponible_en_catalogo",
+        "producto": producto
+    }
+    
 def productos_con_descuento():
     return list(
         db.productos.find(

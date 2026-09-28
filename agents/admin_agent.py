@@ -5,6 +5,12 @@ from services.llm_service import (
     continuar_respuesta_admin
 )
 
+from services.conversation_service import (
+    obtener_historial,
+    agregar_mensaje
+)
+
+
 from services.admin_tools import (
     ADMIN_TOOLS,
     ejecutar_tool,
@@ -14,13 +20,26 @@ from services.admin_tools import (
 from services.chart_service import crear_grafica
 from prompts.admin import obtener_admin_prompt
 
+def procesar_mensaje_admin(
+    mensaje: str,
+    conversation_id: str
+):
+    historial = obtener_historial(
+        conversation_id
+    )
 
-def procesar_mensaje_admin(mensaje: str):
+    agregar_mensaje(
+        conversation_id,
+        "user",
+        mensaje
+    )
 
+   
     instrucciones = obtener_admin_prompt()
 
     response = crear_respuesta_admin(
         mensaje=mensaje,
+        historial=historial,
         instrucciones=instrucciones,
         tools=ADMIN_TOOLS
     )
@@ -67,10 +86,17 @@ def procesar_mensaje_admin(mensaje: str):
                         grafica = posible_grafica
                         break
 
+            agregar_mensaje(
+                conversation_id,
+                "assistant",
+                response.output_text
+            )
+
             return {
                 "respuesta": response.output_text,
                 "tools_utilizadas": tools_utilizadas,
-                "grafica": grafica
+                "grafica": grafica,
+                "conversation_id": conversation_id
             }
 
         tool_outputs = []

@@ -9,6 +9,8 @@ class ChatRequest(BaseModel):
         max_length=2000
     )
 
+    conversation_id: Optional[str] = None
+
 
 class GraficaResponse(BaseModel):
     tipo: str
@@ -21,3 +23,4 @@ class ChatResponse(BaseModel):
     respuesta: str
     tools_utilizadas: list[str] = []
     grafica: Optional[GraficaResponse] = None
+    conversation_id: str
