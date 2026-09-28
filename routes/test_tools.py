@@ -4,8 +4,18 @@ from database import db
 
 from tools.productos import buscar_producto, productos_con_descuento
 from tools.inventario import productos_stock_bajo
-from tools.ventas import productos_mas_vendidos, ventas_totales
+from tools.ventas import analizar_oportunidades_oferta, productos_mas_vendidos, ventas_totales
 from tools.pedidos import pedidos_por_estado
+from tools.ventas import (
+    comparar_ventas,
+    productos_baja_rotacion,
+    analizar_oportunidades_oferta
+)
+
+from tools.inventario import (
+    productos_para_reabastecer,
+    analizar_inventario
+)
 
 
 router = APIRouter(
@@ -75,4 +85,74 @@ def test_colecciones():
     return {
         "database": db.name,
         "colecciones": db.list_collection_names()
+    }
+
+
+@router.get("/comparar-ventas")
+def test_comparar_ventas(
+    inicio1: datetime,
+    fin1: datetime,
+    inicio2: datetime,
+    fin2: datetime
+):
+    return {
+        "resultado": comparar_ventas(
+            inicio1,
+            fin1,
+            inicio2,
+            fin2
+        )
+    }
+
+
+@router.get("/baja-rotacion")
+def test_baja_rotacion(
+    fecha_inicio: datetime,
+    fecha_fin: datetime,
+    limite_ventas: int = 2
+):
+    return {
+        "resultado": productos_baja_rotacion(
+            fecha_inicio,
+            fecha_fin,
+            limite_ventas
+        )
+    }
+
+
+@router.get("/reabastecer")
+def test_reabastecer(
+    limite_stock: int = 10
+):
+    return {
+        "resultado": productos_para_reabastecer(
+            limite_stock
+        )
+    }
+
+
+@router.get("/analizar-inventario")
+def test_analizar_inventario(
+    limite_stock: int = 10
+):
+    return {
+        "resultado": analizar_inventario(
+            limite_stock
+        )
+    }
+
+@router.get("/oportunidades-oferta")
+def test_oportunidades_oferta(
+    fecha_inicio: datetime,
+    fecha_fin: datetime,
+    limite_ventas: int = 2,
+    stock_minimo: int = 1
+):
+    return {
+        "resultado": analizar_oportunidades_oferta(
+            fecha_inicio,
+            fecha_fin,
+            limite_ventas,
+            stock_minimo
+        )
     }
