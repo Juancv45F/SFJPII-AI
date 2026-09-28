@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 
 
 class JsonFormatter(logging.Formatter):
-    CAMPOS = ("admin_id", "conversation_id", "tools", "duration_ms", "error_type", "operation")
+    CAMPOS = ("admin_id", "user_id", "conversation_id", "tools", "duration_ms", "error_type", "operation")
 
     def format(self, record):
         payload = {

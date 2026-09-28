@@ -3,8 +3,8 @@ from time import monotonic
 from logging_setup import get_logger
 
 from services.llm_service import (
-    crear_respuesta_admin,
-    continuar_respuesta_admin
+    crear_respuesta,
+    continuar_respuesta
 )
 
 from services.conversation_service import (
@@ -40,7 +40,7 @@ def procesar_mensaje_admin(
    
     instrucciones = obtener_admin_prompt()
 
-    response = crear_respuesta_admin(
+    response = crear_respuesta(
         mensaje=mensaje,
         historial=[{"role": m["role"], "content": m["content"]} for m in historial[-12:]],
         instrucciones=instrucciones,
@@ -145,7 +145,7 @@ def procesar_mensaje_admin(
                 }
             )
 
-        response = continuar_respuesta_admin(
+        response = continuar_respuesta(
             response_id=response.id,
             tool_outputs=tool_outputs,
             instrucciones=instrucciones,

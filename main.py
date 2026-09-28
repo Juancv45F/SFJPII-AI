@@ -6,7 +6,7 @@ from services.conversation_service import preparar_indices_conversaciones
 from logging_setup import get_logger
 from routes.test_tools import router as test_router
 from routes.admin import router as admin_router
-
+from routes.cliente import router as cliente_router
 
 logger = get_logger("sfjpii.ai")
 
@@ -28,8 +28,9 @@ app = FastAPI(
 
 app.include_router(test_router, dependencies=[Depends(require_service_key)])
 app.include_router(admin_router, dependencies=[Depends(require_service_key)])
+app.include_router(cliente_router, dependencies=[Depends(require_service_key)])
 
-# -------------------------------- 
+# --------------------------------
 @app.get("/")
 def root():
     return {

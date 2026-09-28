@@ -10,11 +10,33 @@ coleccion = db.conversaciones_ai
 
 
 def preparar_indices_conversaciones():
+
+    # Administradores
     coleccion.create_index([("admin_id", ASCENDING), ("conversation_id", ASCENDING)],
                            unique=True, name="admin_conversation_unique")
     coleccion.create_index([("admin_id", ASCENDING), ("updatedAt", DESCENDING)],
                            name="admin_updated_desc")
     coleccion.create_index("expiresAt", expireAfterSeconds=0, name="conversation_expiration")
+
+    #Clientes
+    coleccion.create_index(
+        [
+            ("user_id", ASCENDING),
+            ("conversation_id", ASCENDING)
+        ],
+        unique=True,
+        sparse=True,
+        name="user_conversation_unique"
+    )
+
+    coleccion.create_index(
+        [
+            ("user_id", ASCENDING),
+            ("updatedAt", DESCENDING)
+        ],
+        sparse=True,
+        name="user_updated_desc"
+    )
 
 
 def _expiracion(ahora):
@@ -94,3 +116,88 @@ def guardar_turno(admin_id: str, conversation_id: str, mensaje: str, respuesta: 
             {"role": "assistant", "content": respuesta, "grafica": grafica}
         ]}}
     }, upsert=True)
+
+def obtener_historial_cliente(
+    user_id: str,
+    conversation_id: str
+) -> list[dict]:
+
+    conversacion = coleccion.find_one(
+        {
+            "tipo_usuario": "cliente",
+            "user_id": user_id,
+            "conversation_id": conversation_id
+        },
+        {
+            "_id": 0,
+            "mensajes": 1
+        }
+    )
+
+    if not conversacion:
+        return []
+
+    return conversacion.get(
+        "mensajes",
+        []
+    )
+
+def guardar_turno_cliente(
+    user_id: str,
+    conversation_id: str,
+    mensaje: str,
+    respuesta: str
+):
+    ahora = datetime.now(timezone.utc)
+
+    campos = {
+        "updatedAt": ahora
+    }
+
+    expiracion = _expiracion(ahora)
+
+    if expiracion is not None:
+        campos["expiresAt"] = expiracion
+
+    coleccion.update_one(
+        {
+            "tipo_usuario": "cliente",
+            "user_id": user_id,
+            "conversation_id": conversation_id
+        },
+        {
+            "$setOnInsert": {
+                "tipo_usuario": "cliente",
+                "user_id": user_id,
+                "conversation_id": conversation_id,
+                "createdAt": ahora
+            },
+            "$set": campos,
+
+            **(
+                {
+                    "$unset": {
+                        "expiresAt": ""
+                    }
+                }
+                if expiracion is None
+                else {}
+            ),
+
+            "$push": {
+                "mensajes": {
+                    "$each": [
+                        {
+                            "role": "user",
+                            "content": mensaje
+                        },
+                        {
+                            "role": "assistant",
+                            "content": respuesta
+                        }
+                    ]
+                }
+            }
+        },
+        upsert=True
+    )

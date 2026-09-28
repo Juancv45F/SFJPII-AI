@@ -8,8 +8,8 @@ from unittest.mock import patch
 
 dependency_names = ["services.llm_service", "services.conversation_service"]
 original_dependencies = {name: sys.modules.get(name) for name in dependency_names}
-sys.modules["services.llm_service"] = SimpleNamespace(crear_respuesta_admin=lambda **_: None,
-                                                        continuar_respuesta_admin=lambda **_: None)
+sys.modules["services.llm_service"] = SimpleNamespace(crear_respuesta=lambda **_: None,
+                                                        continuar_respuesta=lambda **_: None)
 sys.modules["services.conversation_service"] = SimpleNamespace(obtener_historial=lambda *_: [],
                                                                  guardar_turno=lambda *_args, **_kwargs: None)
 try:
@@ -64,8 +64,8 @@ class ConversationStressTest(unittest.TestCase):
         chart = {"tipo": "bar", "titulo": "Productos más vendidos", "labels": ["Producto A"], "data": [8]}
 
         with patch.object(admin_agent, "obtener_historial", side_effect=lambda *_: list(history)), \
-             patch.object(admin_agent, "crear_respuesta_admin", side_effect=create_response), \
-             patch.object(admin_agent, "continuar_respuesta_admin", side_effect=continue_response), \
+             patch.object(admin_agent, "crear_respuesta", side_effect=create_response), \
+             patch.object(admin_agent, "continuar_respuesta", side_effect=continue_response), \
              patch.object(admin_agent, "ejecutar_tool", return_value=tool_result), \
              patch.object(admin_agent, "crear_grafica", return_value=chart), \
              patch.object(admin_agent, "guardar_turno", side_effect=save_turn):
