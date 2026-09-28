@@ -8,7 +8,9 @@ from fastapi.testclient import TestClient
 # Aislamos credenciales, MongoDB y consumo de IA en estas pruebas de contrato.
 settings = types.SimpleNamespace(sfjpii_ai_service_key="test-key")
 sys.modules['config'] = types.SimpleNamespace(settings=settings)
-agent = Mock(return_value={"respuesta": "Resultado", "tools_utilizadas": [], "grafica": None})
+collection = Mock()
+sys.modules['database'] = types.SimpleNamespace(db=types.SimpleNamespace(conversaciones_ai=collection))
+agent = Mock(return_value={"respuesta": "Resultado", "tools_utilizadas": [], "grafica": None, "conversation_id": "test-chat"})
 sys.modules['agents.admin_agent'] = types.SimpleNamespace(procesar_mensaje_admin=agent)
 from security import require_service_key
 from routes.admin import router
@@ -32,16 +34,53 @@ class AdminIntegrationTest(unittest.TestCase):
         self.assertEqual(client.post('/admin/chat', json={'mensaje': 'ventas'}).status_code, 503)
 
     def test_response_contract(self):
-        response = client.post('/admin/chat', json={'mensaje': 'ventas'}, headers={'X-Service-Key': 'test-key'})
+        response = client.post('/admin/chat', json={'mensaje': 'ventas', 'conversation_id': 'test-chat'}, headers={'X-Service-Key': 'test-key', 'X-Admin-Id': 'owner'})
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()['respuesta'], 'Resultado')
-        agent.assert_called_once_with('ventas')
+        agent.assert_called_once_with(mensaje='ventas', conversation_id='test-chat', admin_id='owner')
 
     def test_errors_do_not_expose_credentials(self):
         agent.side_effect = RuntimeError('secret')
-        response = client.post('/admin/chat', json={'mensaje': 'ventas'}, headers={'X-Service-Key': 'test-key'})
+        response = client.post('/admin/chat', json={'mensaje': 'ventas'}, headers={'X-Service-Key': 'test-key', 'X-Admin-Id': 'owner'})
         self.assertEqual(response.status_code, 500)
         self.assertNotIn('secret', response.text)
+
+    def test_history_is_scoped_to_admin(self):
+        collection.find_one.return_value = None
+        response = client.get('/admin/conversations/private', headers={'X-Service-Key': 'test-key', 'X-Admin-Id': 'owner'})
+        self.assertEqual(response.status_code, 404)
+        self.assertEqual(collection.find_one.call_args.args[0], {'admin_id': 'owner', 'conversation_id': 'private'})
+
+    def test_list_has_titles_and_pagination(self):
+        collection.find.return_value.sort.return_value.skip.return_value.limit.return_value = [
+            {'conversation_id': str(i), 'mensajes': [{'role': 'user', 'content': 'Ventas'}]} for i in range(31)]
+        response = client.get('/admin/conversations', headers={'X-Service-Key': 'test-key', 'X-Admin-Id': 'owner'})
+        self.assertEqual(len(response.json()['items']), 30)
+        self.assertTrue(response.json()['has_more'])
+        self.assertEqual(response.json()['items'][0]['titulo'], 'Ventas')
+        self.assertEqual(collection.find.call_args.args[0], {'admin_id': 'owner'})
+
+    def test_persists_complete_turn_with_chart_without_truncation(self):
+        from services.conversation_service import guardar_turno
+        chart = {'tipo': 'bar', 'titulo': 'Ventas', 'labels': ['A'], 'data': [5]}
+        guardar_turno('owner', 'chat', 'Ventas', 'Resultado', chart)
+        query, update = collection.update_one.call_args.args
+        self.assertEqual(query, {'admin_id': 'owner', 'conversation_id': 'chat'})
+        messages = update['$push']['mensajes']
+        self.assertNotIn('$slice', messages)
+        self.assertEqual(len(messages['$each']), 2)
+        self.assertEqual(messages['$each'][1]['grafica'], chart)
+
+    def test_delete_is_scoped_to_admin(self):
+        collection.delete_one.return_value.deleted_count = 1
+        response = client.delete('/admin/conversations/private', headers={'X-Service-Key': 'test-key', 'X-Admin-Id': 'owner'})
+        self.assertEqual(response.status_code, 204)
+        collection.delete_one.assert_called_with({'admin_id': 'owner', 'conversation_id': 'private'})
+
+    def test_delete_missing_or_foreign_conversation_returns_404(self):
+        collection.delete_one.return_value.deleted_count = 0
+        response = client.delete('/admin/conversations/private', headers={'X-Service-Key': 'test-key', 'X-Admin-Id': 'owner'})
+        self.assertEqual(response.status_code, 404)
 
 if __name__ == '__main__':
     unittest.main()

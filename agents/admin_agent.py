@@ -7,7 +7,7 @@ from services.llm_service import (
 
 from services.conversation_service import (
     obtener_historial,
-    agregar_mensaje
+    guardar_turno
 )
 
 
@@ -30,19 +30,14 @@ def procesar_mensaje_admin(
         conversation_id
     )
 
-    agregar_mensaje(
-        admin_id,
-        conversation_id,
-        "user",
-        mensaje
-    )
+
 
    
     instrucciones = obtener_admin_prompt()
 
     response = crear_respuesta_admin(
         mensaje=mensaje,
-        historial=historial,
+        historial=[{"role": m["role"], "content": m["content"]} for m in historial[-12:]],
         instrucciones=instrucciones,
         tools=ADMIN_TOOLS
     )
@@ -89,11 +84,12 @@ def procesar_mensaje_admin(
                         grafica = posible_grafica
                         break
 
-            agregar_mensaje(
+            guardar_turno(
                 admin_id,
                 conversation_id,
-                "assistant",
-                response.output_text
+                mensaje,
+                response.output_text,
+                grafica=grafica
             )
 
             return {
@@ -147,11 +143,11 @@ def procesar_mensaje_admin(
             tools=ADMIN_TOOLS
         )
 
+    respuesta = "No pude completar el análisis después de varias consultas."
+    guardar_turno(admin_id, conversation_id, mensaje, respuesta)
     return {
-        "respuesta": (
-            "No pude completar el análisis "
-            "después de varias consultas."
-        ),
+        "respuesta": respuesta,
         "tools_utilizadas": tools_utilizadas,
-        "grafica": None
+        "grafica": None,
+        "conversation_id": conversation_id
     }

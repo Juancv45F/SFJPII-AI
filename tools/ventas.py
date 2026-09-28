@@ -12,8 +12,10 @@ ESTADOS_VALIDOS = [
 def productos_mas_vendidos(
     fecha_inicio: datetime,
     fecha_fin: datetime,
-    limite: int = 10
+    limite: int = 10,
+    metrica: str = "cantidad"
 ):
+    campo_orden = "ingresos" if metrica == "ingresos" else "cantidad_vendida"
     pipeline = [
         {
             "$match": {
@@ -45,7 +47,7 @@ def productos_mas_vendidos(
         },
         {
             "$sort": {
-                "cantidad_vendida": -1
+                campo_orden: -1
             }
         },
         {
@@ -57,6 +59,7 @@ def productos_mas_vendidos(
                 "productoId": {
                     "$toString": "$_id"
                 },
+                "_productoId": "$_id",
                 "nombre": 1,
                 "cantidad_vendida": 1,
                 "ingresos": 1
@@ -64,7 +67,23 @@ def productos_mas_vendidos(
         }
     ]
 
-    return list(db.pedidos.aggregate(pipeline))
+    ventas = list(db.pedidos.aggregate(pipeline))
+    # El pipeline histórico devuelve productoId como texto. Consultamos el
+    # catálogo por los ObjectId originales desde una segunda agregación para
+    # poder distinguir productos retirados sin perder sus ventas históricas.
+    ids_catalogo = [item.get("_productoId") for item in ventas if item.get("_productoId") is not None]
+    catalogo = list(db.productos.find({"_id": {"$in": ids_catalogo}},
+                                     {"_id": 1, "stock": 1, "categoria.nombre": 1, "solo_encargo": 1}))
+    por_id = {str(item["_id"]): item for item in catalogo}
+    for item in ventas:
+        item.pop("_productoId", None)
+        producto = por_id.get(str(item.get("productoId", "")))
+        item["en_catalogo"] = producto is not None
+        item["stock_actual"] = producto.get("stock") if producto else None
+        item["solo_encargo"] = bool(producto.get("solo_encargo", False)) if producto else None
+        item["categoria_actual"] = producto.get("categoria", {}).get("nombre") if producto else None
+        item["metrica_orden"] = metrica
+    return ventas
 
 def ventas_totales(
     fecha_inicio: datetime,
@@ -148,6 +167,33 @@ def comparar_ventas(
             else None
         )
     }
+
+
+def ingresos_por_categoria(fecha_inicio, fecha_fin):
+    return list(db.pedidos.aggregate([
+        {"$match": {"fecha": {"$gte": fecha_inicio, "$lte": fecha_fin}, "estado": {"$in": ESTADOS_VALIDOS}}},
+        {"$unwind": "$items"},
+        {"$lookup": {"from": "productos", "localField": "items.productoId", "foreignField": "_id", "as": "producto_actual"}},
+        {"$unwind": {"path": "$producto_actual", "preserveNullAndEmptyArrays": True}},
+        {"$group": {
+            "_id": {"$ifNull": ["$producto_actual.categoria.nombre", "Fuera del catálogo / sin categoría"]},
+            "ingresos": {"$sum": "$items.subtotal"}, "unidades_vendidas": {"$sum": "$items.cantidad"}
+        }},
+        {"$sort": {"ingresos": -1}},
+        {"$project": {"_id": 0, "categoria": "$_id", "ingresos": {"$round": ["$ingresos", 2]}, "unidades_vendidas": 1}}
+    ]))
+
+
+def ventas_por_dia(fecha_inicio, fecha_fin):
+    return list(db.pedidos.aggregate([
+        {"$match": {"fecha": {"$gte": fecha_inicio, "$lte": fecha_fin}, "estado": {"$in": ESTADOS_VALIDOS}}},
+        {"$group": {
+            "_id": {"$dateToString": {"format": "%Y-%m-%d", "date": "$fecha", "timezone": "America/Mexico_City"}},
+            "ingresos": {"$sum": "$total"}, "pedidos": {"$sum": 1}
+        }},
+        {"$sort": {"_id": 1}},
+        {"$project": {"_id": 0, "fecha": "$_id", "ingresos": {"$round": ["$ingresos", 2]}, "pedidos": 1}}
+    ]))
 
 
 def productos_baja_rotacion(
