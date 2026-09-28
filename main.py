@@ -1,13 +1,27 @@
+from contextlib import asynccontextmanager
 from fastapi import FastAPI, Depends
 from security import require_service_key
 from database import verificar_conexion
+from services.conversation_service import preparar_indices_conversaciones
+from logging_setup import get_logger
 from routes.test_tools import router as test_router
 from routes.admin import router as admin_router
 
 
+logger = get_logger("sfjpii.ai")
+
+
+@asynccontextmanager
+async def lifespan(_app):
+    preparar_indices_conversaciones()
+    logger.info("conversation_indexes_ready", extra={"operation": "startup"})
+    yield
+
+
 app = FastAPI(
     title="SFJPII AI",
-    version="1.0.0"
+    version="1.0.0",
+    lifespan=lifespan
 )
 
 # Routes
@@ -35,8 +49,8 @@ def health():
         }
 
     except Exception as error:
+        logger.exception("health_check_failed", extra={"error_type": type(error).__name__})
         return {
             "status": "error",
-            "mongodb": "disconnected",
-            "detail": str(error)
+            "mongodb": "disconnected"
         }

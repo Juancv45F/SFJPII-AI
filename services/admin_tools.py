@@ -1,5 +1,5 @@
 import json
-from datetime import datetime
+from tools.validators import ToolValidationError, rango, entero_limite
 
 from tools.productos import (
     buscar_producto,
@@ -16,8 +16,6 @@ from tools.ventas import (
     ventas_por_dia
 )
 from tools.pedidos import pedidos_por_estado, analizar_pedidos, evolucion_pedidos, analizar_encargos
-
-from tools.ventas import comparar_ventas
 
 from tools.inventario import (
     productos_para_reabastecer,
@@ -367,18 +365,10 @@ ADMIN_TOOLS.extend([
 ])
 
 
-def _rango(argumentos):
-    inicio = datetime.fromisoformat(argumentos["fecha_inicio"])
-    fin = datetime.fromisoformat(argumentos["fecha_fin"])
-    if inicio > fin:
-        raise ValueError("fecha_inicio no puede ser posterior a fecha_fin")
-    return inicio, fin
-
-
 def ejecutar_tool(nombre: str, argumentos: dict):
 
     if nombre in {"ingresos_por_categoria", "ventas_por_dia", "analizar_pedidos", "evolucion_pedidos", "analizar_encargos"}:
-        inicio, fin = _rango(argumentos)
+        inicio, fin = rango(argumentos)
         funciones = {
             "ingresos_por_categoria": ingresos_por_categoria,
             "ventas_por_dia": ventas_por_dia,
@@ -389,58 +379,41 @@ def ejecutar_tool(nombre: str, argumentos: dict):
         return funciones[nombre](inicio, fin)
 
     if nombre == "reabastecimiento_priorizado":
-        inicio, fin = _rango(argumentos)
-        limite_stock = max(0, min(int(argumentos["limite_stock"]), 100000))
-        limite = max(1, min(int(argumentos["limite"]), 100))
+        inicio, fin = rango(argumentos)
+        limite_stock = entero_limite(argumentos["limite_stock"], "limite_stock", 0, 100000)
+        limite = entero_limite(argumentos["limite"], "limite", 1, 100)
         return reabastecimiento_priorizado(inicio, fin, limite_stock, limite)
 
     if nombre == "analizar_oportunidades_oferta":
+        inicio, fin = rango(argumentos)
         return analizar_oportunidades_oferta(
-            datetime.fromisoformat(
-                argumentos["fecha_inicio"]
-            ),
-            datetime.fromisoformat(
-                argumentos["fecha_fin"]
-            ),
-            argumentos["limite_ventas"],
-            argumentos["stock_minimo"]
+            inicio, fin,
+            entero_limite(argumentos["limite_ventas"], "limite_ventas", 0, 100000),
+            entero_limite(argumentos["stock_minimo"], "stock_minimo", 0, 100000)
         )
 
     if nombre == "productos_baja_rotacion":
+        inicio, fin = rango(argumentos)
         return productos_baja_rotacion(
-            datetime.fromisoformat(
-                argumentos["fecha_inicio"]
-            ),
-            datetime.fromisoformat(
-                argumentos["fecha_fin"]
-            ),
-            argumentos["limite_ventas"]
+            inicio, fin,
+            entero_limite(argumentos["limite_ventas"], "limite_ventas", 0, 100000)
         )
 
     if nombre == "comparar_ventas":
+        periodo1_inicio, periodo1_fin = rango(argumentos, "periodo1_inicio", "periodo1_fin")
+        periodo2_inicio, periodo2_fin = rango(argumentos, "periodo2_inicio", "periodo2_fin")
         return comparar_ventas(
-            datetime.fromisoformat(
-                argumentos["periodo1_inicio"]
-            ),
-            datetime.fromisoformat(
-                argumentos["periodo1_fin"]
-            ),
-            datetime.fromisoformat(
-                argumentos["periodo2_inicio"]
-            ),
-            datetime.fromisoformat(
-                argumentos["periodo2_fin"]
-            )
+            periodo1_inicio, periodo1_fin, periodo2_inicio, periodo2_fin
         )
 
     if nombre == "productos_para_reabastecer":
         return productos_para_reabastecer(
-            argumentos["limite_stock"]
+            entero_limite(argumentos["limite_stock"], "limite_stock", 0, 100000)
         )
 
     if nombre == "analizar_inventario":
         return analizar_inventario(
-            argumentos["limite_stock"]
+            entero_limite(argumentos["limite_stock"], "limite_stock", 0, 100000)
         )
 
     if nombre == "buscar_producto":
@@ -453,21 +426,23 @@ def ejecutar_tool(nombre: str, argumentos: dict):
 
     if nombre == "productos_stock_bajo":
         return productos_stock_bajo(
-            argumentos["limite"]
+            entero_limite(argumentos["limite"], "limite", 0, 100000)
         )
 
     if nombre == "productos_mas_vendidos":
+        inicio, fin = rango(argumentos)
+        if argumentos["metrica"] not in {"cantidad", "ingresos"}:
+            raise ToolValidationError("metrica debe ser cantidad o ingresos")
         return productos_mas_vendidos(
-            datetime.fromisoformat(argumentos["fecha_inicio"]),
-            datetime.fromisoformat(argumentos["fecha_fin"]),
-            argumentos["limite"],
+            inicio, fin,
+            entero_limite(argumentos["limite"], "limite", 1, 100),
             argumentos["metrica"]
         )
 
     if nombre == "ventas_totales":
+        inicio, fin = rango(argumentos)
         return ventas_totales(
-            datetime.fromisoformat(argumentos["fecha_inicio"]),
-            datetime.fromisoformat(argumentos["fecha_fin"])
+            inicio, fin
         )
 
     if nombre == "pedidos_por_estado":

@@ -1,10 +1,11 @@
 from database import db
-from tools.ventas import ESTADOS_VALIDOS
+from tools.constants import ESTADOS_VENTA, FILTRO_INVENTARIO_FISICO
 
 
 def productos_stock_bajo(limite: int = 10):
     productos = db.productos.find(
         {
+            **FILTRO_INVENTARIO_FISICO,
             "stock": {
                 "$lte": limite
             }
@@ -26,7 +27,7 @@ def productos_para_reabastecer(limite_stock: int = 10):
                 "stock": {
                     "$lte": limite_stock
                 },
-                "solo_encargo": {"$ne": True}
+                **FILTRO_INVENTARIO_FISICO
             },
             {
                 "_id": 0,
@@ -40,20 +41,20 @@ def productos_para_reabastecer(limite_stock: int = 10):
     )
 
 def analizar_inventario(limite_stock: int = 10):
-    total_productos = db.productos.count_documents({})
+    total_productos = db.productos.count_documents(FILTRO_INVENTARIO_FISICO)
 
-    agotados = db.productos.count_documents({
+    agotados = db.productos.count_documents({**FILTRO_INVENTARIO_FISICO,
         "stock": 0
     })
 
-    stock_bajo = db.productos.count_documents({
+    stock_bajo = db.productos.count_documents({**FILTRO_INVENTARIO_FISICO,
         "stock": {
             "$gt": 0,
             "$lte": limite_stock
         }
     })
 
-    disponibles = db.productos.count_documents({
+    disponibles = db.productos.count_documents({**FILTRO_INVENTARIO_FISICO,
         "stock": {
             "$gt": limite_stock
         }
@@ -64,7 +65,8 @@ def analizar_inventario(limite_stock: int = 10):
         "agotados": agotados,
         "stock_bajo": stock_bajo,
         "disponibles": disponibles,
-        "limite_stock_bajo": limite_stock
+        "limite_stock_bajo": limite_stock,
+        "productos_solo_encargo_excluidos": db.productos.count_documents({"solo_encargo": True})
     }
 
 
@@ -75,14 +77,14 @@ def reabastecimiento_priorizado(fecha_inicio, fecha_fin, limite_stock: int = 10,
     lo que no se incluyen como recomendaciones de inventario físico.
     """
     ventas = list(db.pedidos.aggregate([
-        {"$match": {"fecha": {"$gte": fecha_inicio, "$lte": fecha_fin}, "estado": {"$in": ESTADOS_VALIDOS}}},
+        {"$match": {"fecha": {"$gte": fecha_inicio, "$lte": fecha_fin}, "estado": {"$in": list(ESTADOS_VENTA)}}},
         {"$unwind": "$items"},
         {"$group": {"_id": "$items.productoId", "cantidad_vendida": {"$sum": "$items.cantidad"},
                     "ingresos": {"$sum": "$items.subtotal"}}}
     ]))
     ventas_por_id = {item["_id"]: item for item in ventas}
     productos = db.productos.find(
-        {"stock": {"$lte": limite_stock}, "solo_encargo": {"$ne": True}},
+        {"stock": {"$lte": limite_stock}, **FILTRO_INVENTARIO_FISICO},
         {"_id": 1, "nombre": 1, "stock": 1, "precio": 1, "categoria.nombre": 1}
     )
     resultado = []

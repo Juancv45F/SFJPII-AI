@@ -6,7 +6,7 @@ from fastapi import FastAPI, Depends
 from fastapi.testclient import TestClient
 
 # Aislamos credenciales, MongoDB y consumo de IA en estas pruebas de contrato.
-settings = types.SimpleNamespace(sfjpii_ai_service_key="test-key")
+settings = types.SimpleNamespace(sfjpii_ai_service_key="test-key", chat_retention_days=180)
 sys.modules['config'] = types.SimpleNamespace(settings=settings)
 collection = Mock()
 sys.modules['database'] = types.SimpleNamespace(db=types.SimpleNamespace(conversaciones_ai=collection))
@@ -14,6 +14,7 @@ agent = Mock(return_value={"respuesta": "Resultado", "tools_utilizadas": [], "gr
 sys.modules['agents.admin_agent'] = types.SimpleNamespace(procesar_mensaje_admin=agent)
 from security import require_service_key
 from routes.admin import router
+from tools.validators import ToolValidationError
 app = FastAPI()
 app.include_router(router, dependencies=[Depends(require_service_key)])
 client = TestClient(app)
@@ -45,11 +46,28 @@ class AdminIntegrationTest(unittest.TestCase):
         self.assertEqual(response.status_code, 500)
         self.assertNotIn('secret', response.text)
 
+    def test_invalid_tool_arguments_return_422(self):
+        agent.side_effect = ToolValidationError('fecha_inicio debe ser una fecha ISO 8601 válida')
+        response = client.post('/admin/chat', json={'mensaje': 'ventas'}, headers={'X-Service-Key': 'test-key', 'X-Admin-Id': 'owner'})
+        self.assertEqual(response.status_code, 422)
+        self.assertIn('fecha_inicio', response.json()['detail'])
+
     def test_history_is_scoped_to_admin(self):
         collection.find_one.return_value = None
         response = client.get('/admin/conversations/private', headers={'X-Service-Key': 'test-key', 'X-Admin-Id': 'owner'})
         self.assertEqual(response.status_code, 404)
         self.assertEqual(collection.find_one.call_args.args[0], {'admin_id': 'owner', 'conversation_id': 'private'})
+
+    def test_two_admins_never_share_the_history_filter(self):
+        collection.find_one.return_value = {'conversation_id': 'same', 'mensajes': []}
+        for owner in ('admin-a', 'admin-b'):
+            response = client.get('/admin/conversations/same', headers={'X-Service-Key': 'test-key', 'X-Admin-Id': owner})
+            self.assertEqual(response.status_code, 200)
+        filters = [call.args[0] for call in collection.find_one.call_args_list[-2:]]
+        self.assertEqual(filters, [
+            {'admin_id': 'admin-a', 'conversation_id': 'same'},
+            {'admin_id': 'admin-b', 'conversation_id': 'same'}
+        ])
 
     def test_list_has_titles_and_pagination(self):
         collection.find.return_value.sort.return_value.skip.return_value.limit.return_value = [
@@ -70,6 +88,15 @@ class AdminIntegrationTest(unittest.TestCase):
         self.assertNotIn('$slice', messages)
         self.assertEqual(len(messages['$each']), 2)
         self.assertEqual(messages['$each'][1]['grafica'], chart)
+        self.assertIn('expiresAt', update['$set'])
+
+    def test_conversation_indexes_cover_owner_sort_and_retention(self):
+        from services.conversation_service import preparar_indices_conversaciones
+        collection.create_index.reset_mock()
+        preparar_indices_conversaciones()
+        self.assertEqual(collection.create_index.call_count, 3)
+        self.assertTrue(collection.create_index.call_args_list[0].kwargs['unique'])
+        self.assertEqual(collection.create_index.call_args_list[2].kwargs['expireAfterSeconds'], 0)
 
     def test_delete_is_scoped_to_admin(self):
         collection.delete_one.return_value.deleted_count = 1

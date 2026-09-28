@@ -29,4 +29,10 @@ El asistente dispone de herramientas para:
 
 Los ingresos consideran únicamente pedidos `pagado`, `en_camino` y `entregado`. Los pendientes y cancelados se incluyen en métricas operativas, pero no como ventas realizadas. La agrupación diaria usa `America/Mexico_City`. Como los pedidos históricos no guardan una copia de la categoría, los artículos cuyo producto fue eliminado se agrupan como `Fuera del catálogo / sin categoría`.
 
+Todas las consultas de inventario físico excluyen `solo_encargo`: stock bajo, resumen de inventario, baja rotación, oportunidades de oferta y prioridades de reabastecimiento. Las fechas se normalizan a UTC y todos los periodos y límites utilizan los validadores comunes de `tools/validators.py`. Los estados que generan ingresos, el filtro de inventario y la zona horaria están centralizados en `tools/constants.py`.
+
+Cada gráfica incluye `unidad`: `MXN`, `unidades`, `pedidos`, `productos` o `encargos`. El campo es obligatorio para respuestas nuevas; el frontend admite historiales anteriores sin unidad.
+
+Al iniciar el servicio se crean índices para propietario/conversación (único), historial por propietario/fecha e índice TTL. `CHAT_RETENTION_DAYS` controla la vigencia desde la última actividad (180 días por defecto y 0 para no añadir vencimiento a los chats nuevos). La retención se aplica o renueva cuando se guarda un turno; los documentos antiguos sin `expiresAt` no se eliminan automáticamente hasta que vuelvan a actualizarse. Los logs de la IA usan JSON y omiten mensajes, respuestas y credenciales. Los errores distinguen validación, límite de API, timeout, conexión y MongoDB sin exponer detalles internos.
+
 Ejecuta `python -m unittest discover -p "test*.py"` para validar herramientas, gráficas, seguridad, persistencia y el escenario conversacional encadenado. Las pruebas no llaman al modelo. Las agregaciones también fueron verificadas directamente contra las colecciones configuradas, sin mostrar datos sensibles.

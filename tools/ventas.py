@@ -1,12 +1,6 @@
 from database import db
 from datetime import datetime
-
-
-ESTADOS_VALIDOS = [
-    "pagado",
-    "en_camino",
-    "entregado"
-]
+from tools.constants import ESTADOS_VENTA, FILTRO_INVENTARIO_FISICO, ZONA_HORARIA_NEGOCIO
 
 
 def productos_mas_vendidos(
@@ -24,7 +18,7 @@ def productos_mas_vendidos(
                     "$lte": fecha_fin
                 },
                 "estado": {
-                    "$in": ESTADOS_VALIDOS
+                    "$in": list(ESTADOS_VENTA)
                 }
             }
         },
@@ -97,7 +91,7 @@ def ventas_totales(
                     "$lte": fecha_fin
                 },
                 "estado": {
-                    "$in": ESTADOS_VALIDOS
+                    "$in": list(ESTADOS_VENTA)
                 }
             }
         },
@@ -171,7 +165,7 @@ def comparar_ventas(
 
 def ingresos_por_categoria(fecha_inicio, fecha_fin):
     return list(db.pedidos.aggregate([
-        {"$match": {"fecha": {"$gte": fecha_inicio, "$lte": fecha_fin}, "estado": {"$in": ESTADOS_VALIDOS}}},
+        {"$match": {"fecha": {"$gte": fecha_inicio, "$lte": fecha_fin}, "estado": {"$in": list(ESTADOS_VENTA)}}},
         {"$unwind": "$items"},
         {"$lookup": {"from": "productos", "localField": "items.productoId", "foreignField": "_id", "as": "producto_actual"}},
         {"$unwind": {"path": "$producto_actual", "preserveNullAndEmptyArrays": True}},
@@ -186,9 +180,9 @@ def ingresos_por_categoria(fecha_inicio, fecha_fin):
 
 def ventas_por_dia(fecha_inicio, fecha_fin):
     return list(db.pedidos.aggregate([
-        {"$match": {"fecha": {"$gte": fecha_inicio, "$lte": fecha_fin}, "estado": {"$in": ESTADOS_VALIDOS}}},
+        {"$match": {"fecha": {"$gte": fecha_inicio, "$lte": fecha_fin}, "estado": {"$in": list(ESTADOS_VENTA)}}},
         {"$group": {
-            "_id": {"$dateToString": {"format": "%Y-%m-%d", "date": "$fecha", "timezone": "America/Mexico_City"}},
+            "_id": {"$dateToString": {"format": "%Y-%m-%d", "date": "$fecha", "timezone": ZONA_HORARIA_NEGOCIO}},
             "ingresos": {"$sum": "$total"}, "pedidos": {"$sum": 1}
         }},
         {"$sort": {"_id": 1}},
@@ -209,7 +203,7 @@ def productos_baja_rotacion(
                     "$lte": fecha_fin
                 },
                 "estado": {
-                    "$in": ESTADOS_VALIDOS
+                    "$in": list(ESTADOS_VENTA)
                 }
             }
         },
@@ -239,7 +233,7 @@ def productos_baja_rotacion(
 
     productos = list(
         db.productos.find(
-            {},
+            FILTRO_INVENTARIO_FISICO,
             {
                 "_id": 1,
                 "nombre": 1,
