@@ -124,6 +124,8 @@ def consultar_mis_encargos(user_id: str, estado=None, limite: int = 10) -> list[
             "tipo_entrega": 1,
             "ubicacion.alias": 1,
             "motivo_cancelacion": 1,
+            "cancelable_hasta": 1,
+            "fecha_estimada_llegada": 1,
             "disponibleAt": 1,
             "items": 1,
         },
@@ -139,6 +141,8 @@ def consultar_mis_encargos(user_id: str, estado=None, limite: int = 10) -> list[
             "tipo_entrega": documento.get("tipo_entrega"),
             "ubicacion_alias": (documento.get("ubicacion") or {}).get("alias"),
             "disponible_desde": documento.get("disponibleAt"),
+            "cancelable_hasta": documento.get("cancelable_hasta"),
+            "fecha_estimada_llegada": documento.get("fecha_estimada_llegada"),
             "motivo_cancelacion": documento.get("motivo_cancelacion"),
             "productos": [_item(item) for item in documento.get("items", [])],
         }
