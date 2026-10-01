@@ -16,6 +16,7 @@ from services.llm_service import (
     crear_respuesta,
     continuar_respuesta
 )
+from services.client_scope import es_consulta_permitida, RESPUESTA_FUERA_DE_ALCANCE
 
 
 def procesar_mensaje_cliente(
@@ -28,6 +29,22 @@ def procesar_mensaje_cliente(
         user_id,
         conversation_id
     )
+
+    # El filtro se ejecuta antes de llamar al modelo para que las consultas
+    # claramente ajenas a la farmacia nunca se respondan con conocimiento general.
+    if not es_consulta_permitida(mensaje, historial):
+        guardar_turno_cliente(
+            user_id,
+            conversation_id,
+            mensaje,
+            RESPUESTA_FUERA_DE_ALCANCE
+        )
+        return {
+            "respuesta": RESPUESTA_FUERA_DE_ALCANCE,
+            "tools_utilizadas": [],
+            "grafica": None,
+            "conversation_id": conversation_id
+        }
 
     # Prompt exclusivo para clientes
     instrucciones = obtener_cliente_prompt()
