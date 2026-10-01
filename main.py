@@ -7,6 +7,7 @@ from logging_setup import get_logger
 from routes.test_tools import router as test_router
 from routes.admin import router as admin_router
 from routes.cliente import router as cliente_router
+from services.keep_alive_service import start_keep_alive_task, stop_keep_alive_task
 
 logger = get_logger("sfjpii.ai")
 
@@ -15,7 +16,11 @@ logger = get_logger("sfjpii.ai")
 async def lifespan(_app):
     preparar_indices_conversaciones()
     logger.info("conversation_indexes_ready", extra={"operation": "startup"})
-    yield
+    keep_alive_task = start_keep_alive_task()
+    try:
+        yield
+    finally:
+        await stop_keep_alive_task(keep_alive_task)
 
 
 app = FastAPI(

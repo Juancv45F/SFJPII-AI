@@ -12,6 +12,8 @@ class Settings(BaseSettings):
     openai_model: str = "gpt-6-luna"
     chat_retention_days: int = Field(default=180, ge=0, le=3650)
     pharmacy_info_docx: str = "data/informacion_farmacia.docx"
+    sfjpii_backend_url: str = "https://sfjpii-back.onrender.com"
+    keep_alive_interval_seconds: int = Field(default=780, ge=60, le=86400)
 
     model_config = SettingsConfigDict(
         env_file=".env",
