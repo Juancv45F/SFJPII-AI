@@ -18,8 +18,9 @@ La herramienta pública `consultar_informacion_farmacia` lee en cada consulta
 `data/informacion_farmacia.docx`. El archivo contiene teléfonos, WhatsApp,
 dirección, horario regular y excepciones por fecha. Se puede editar con Word sin
 cambiar código; basta guardar el archivo para que la siguiente consulta utilice
-su contenido. En producción, `PHARMACY_INFO_DOCX` permite apuntar a una ruta
-persistente o montada fuera del repositorio.
+su contenido. En un servidor con disco persistente, `PHARMACY_INFO_DOCX` permite
+apuntar a una ruta fuera del repositorio. En Vercel el documento viaja en el
+despliegue: para cambiarlo hay que hacer commit y desplegar de nuevo.
 
 Ningún esquema de herramienta contiene `user_id`. `cliente_agent` recibe esa
 identidad desde la ruta protegida y la inyecta al ejecutar la herramienta.

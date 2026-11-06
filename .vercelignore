@@ -1,0 +1,9 @@
+# Secretos. La CLI de Vercel solo ignora por defecto .env.local y .env.*.local.
+.env
+.env.*
+
+# Anclado a la raíz: routes/test_tools.py sí forma parte de la app.
+/test_*.py
+
+/*.md
+.gitattributes

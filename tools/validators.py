@@ -5,6 +5,13 @@ class ToolValidationError(ValueError):
     pass
 
 
+def texto_busqueda(valor, nombre: str, maximo: int = 100) -> str:
+    # Sin "strict" el modelo puede enviar cualquier tipo en los argumentos.
+    if not isinstance(valor, str) or not valor.strip() or len(valor) > maximo:
+        raise ToolValidationError(f"{nombre} debe ser un texto de 1 a {maximo} caracteres")
+    return valor.strip()
+
+
 def fecha_iso(valor, nombre: str) -> datetime:
     if isinstance(valor, datetime):
         fecha = valor

@@ -113,7 +113,7 @@ def procesar_mensaje_cliente(
         # Enviar los resultados de las tools
         # nuevamente al modelo.
         response = continuar_respuesta(
-            response_id=response.id,
+            response=response,
             tool_outputs=tool_outputs,
             instrucciones=instrucciones,
             tools=CLIENTE_TOOLS

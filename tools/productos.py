@@ -1,4 +1,7 @@
+import re
+
 from database import db
+from tools.validators import texto_busqueda
 
 
 def _normalizar_precio_producto(producto: dict) -> dict:
@@ -73,10 +76,11 @@ def _normalizar_precio_producto(producto: dict) -> dict:
 
 
 def buscar_producto(nombre: str):
+    nombre = texto_busqueda(nombre, "nombre")
     producto = db.productos.find_one(
         {
             "nombre": {
-                "$regex": nombre,
+                "$regex": re.escape(nombre),
                 "$options": "i"
             }
         },
@@ -151,11 +155,12 @@ def productos_por_categoria(
     categoria: str,
     limite: int = 20
 ):
+    categoria = texto_busqueda(categoria, "categoria")
     productos = list(
         db.productos.find(
             {
                 "categoria.nombre": {
-                    "$regex": f"^{categoria}$",
+                    "$regex": f"^{re.escape(categoria)}$",
                     "$options": "i"
                 },
                 "categoria.activa": True
@@ -184,25 +189,26 @@ def buscar_productos(
     busqueda: str,
     limite: int = 10
 ):
+    patron = re.escape(texto_busqueda(busqueda, "busqueda"))
     productos = list(
         db.productos.find(
             {
                 "$or": [
                     {
                         "nombre": {
-                            "$regex": busqueda,
+                            "$regex": patron,
                             "$options": "i"
                         }
                     },
                     {
                         "descripcion": {
-                            "$regex": busqueda,
+                            "$regex": patron,
                             "$options": "i"
                         }
                     },
                     {
                         "categoria.nombre": {
-                            "$regex": busqueda,
+                            "$regex": patron,
                             "$options": "i"
                         }
                     }

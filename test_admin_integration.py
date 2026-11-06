@@ -105,6 +105,25 @@ class AdminIntegrationTest(unittest.TestCase):
         self.assertEqual(collection.create_index.call_args_list[2].kwargs['expireAfterSeconds'], 0)
         self.assertTrue(collection.create_index.call_args_list[3].kwargs['unique'])
 
+    def test_indexes_are_created_once_and_failures_do_not_block(self):
+        from pymongo.errors import PyMongoError
+        from services import conversation_service
+        conversation_service._indices_listos = False
+        self.addCleanup(setattr, conversation_service, '_indices_listos', False)
+        collection.create_index.reset_mock()
+        collection.create_index.side_effect = PyMongoError('sin conexión')
+        self.addCleanup(setattr, collection.create_index, 'side_effect', None)
+
+        conversation_service.asegurar_indices_conversaciones()
+        self.assertFalse(conversation_service._indices_listos)
+
+        collection.create_index.side_effect = None
+        collection.create_index.reset_mock()
+        conversation_service.asegurar_indices_conversaciones()
+        conversation_service.asegurar_indices_conversaciones()
+        self.assertTrue(conversation_service._indices_listos)
+        self.assertEqual(collection.create_index.call_count, 5)
+
     def test_client_identity_comes_only_from_trusted_header(self):
         user_id = '507f1f77bcf86cd799439011'
         response = client.post('/cliente/chat', json={

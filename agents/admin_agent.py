@@ -113,7 +113,7 @@ def procesar_mensaje_admin(
         for llamada in llamadas:
 
             argumentos = json.loads(
-                llamada.arguments
+                llamada.arguments or "{}"
             )
 
             resultado = ejecutar_tool(
@@ -146,7 +146,7 @@ def procesar_mensaje_admin(
             )
 
         response = continuar_respuesta(
-            response_id=response.id,
+            response=response,
             tool_outputs=tool_outputs,
             instrucciones=instrucciones,
             tools=ADMIN_TOOLS

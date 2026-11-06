@@ -53,8 +53,8 @@ class ConversationStressTest(unittest.TestCase):
             return SimpleNamespace(id=f"response-{index}", output=[SimpleNamespace(
                 type="function_call", name=name, arguments=json.dumps(arguments), call_id=f"call-{index}")])
 
-        def continue_response(response_id, tool_outputs, instrucciones, tools):
-            return SimpleNamespace(id=response_id, output=[], output_text=f"Respuesta administrativa {active['index'] + 1}")
+        def continue_response(response, tool_outputs, instrucciones, tools):
+            return SimpleNamespace(id=response.id, output=[], output_text=f"Respuesta administrativa {active['index'] + 1}")
 
         def save_turn(admin_id, conversation_id, mensaje, respuesta, grafica=None):
             history.extend([{"role": "user", "content": mensaje}, {"role": "assistant", "content": respuesta}])

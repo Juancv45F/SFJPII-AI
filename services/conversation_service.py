@@ -1,12 +1,20 @@
+from threading import Lock
 from uuid import uuid4
 from datetime import datetime, timezone, timedelta
 from pymongo import ASCENDING, DESCENDING
+from pymongo.errors import PyMongoError
 
 from database import db
 from config import settings
+from logging_setup import get_logger
 
+
+logger = get_logger("sfjpii.ai.conversations")
 
 coleccion = db.conversaciones_ai
+
+_indices_listos = False
+_indices_lock = Lock()
 
 
 def preparar_indices_conversaciones():
@@ -37,6 +45,30 @@ def preparar_indices_conversaciones():
         sparse=True,
         name="user_updated_desc"
     )
+
+
+def asegurar_indices_conversaciones():
+    """Crea los índices una vez por instancia sin bloquear el servicio si fallan.
+
+    create_index es idempotente. Se llama al arrancar y antes de cada escritura
+    porque en serverless el arranque puede fallar o repetirse por instancia.
+    """
+    global _indices_listos
+
+    if _indices_listos:
+        return
+
+    with _indices_lock:
+        if _indices_listos:
+            return
+        try:
+            preparar_indices_conversaciones()
+        except PyMongoError as error:
+            # Se reintenta en la siguiente escritura.
+            logger.warning("conversation_indexes_failed", extra={"error_type": type(error).__name__})
+            return
+        _indices_listos = True
+        logger.info("conversation_indexes_ready", extra={"operation": "startup"})
 
 
 def _expiracion(ahora):
@@ -102,6 +134,7 @@ def recuperar_conversacion(admin_id: str, conversation_id: str):
 
 
 def guardar_turno(admin_id: str, conversation_id: str, mensaje: str, respuesta: str, grafica=None):
+    asegurar_indices_conversaciones()
     ahora = datetime.now(timezone.utc)
     campos = {"updatedAt": ahora}
     expiracion = _expiracion(ahora)
@@ -148,6 +181,7 @@ def guardar_turno_cliente(
     mensaje: str,
     respuesta: str
 ):
+    asegurar_indices_conversaciones()
     ahora = datetime.now(timezone.utc)
 
     campos = {
